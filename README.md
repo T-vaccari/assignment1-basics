@@ -1,3 +1,10 @@
+This is my solution to the assignment for the course. Everything is derived from scratch without using AI tools.
+If I cannot build it, I cannot understand it, I think it's an effective way to approach learning!
+
+All the code is going to be written in the cs336_basics folder, then to be tested it's going to be called in the adapter.py file.
+
+
+
 # CS336 Spring 2025 Assignment 1: Basics
 
 For a full description of the assignment, see the assignment handout at
