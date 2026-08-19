@@ -50,13 +50,14 @@ special_tokens: list[str]
 
             for match in re.finditer(PAT, doc):
                match_encoded = match.group(0).encode("utf-8")
-               pre_token_count[bytes(match_encoded)] = pre_token_count.get(tuple(match_encoded), 0) + 1
+               tuple_of_bytes = tuple([match_encoded[i:i+1] for i in range(len(match_encoded)) ])
+               print(tuple_of_bytes)
+               pre_token_count[tuple_of_bytes] = pre_token_count.get(tuple_of_bytes, 0) + 1
                
 
    print(pre_token_count.keys(), pre_token_count.values())
 
-   for l in pre_token_count.keys():
-      print(bytes(l).decode("utf-8"))
+
 
 
 
