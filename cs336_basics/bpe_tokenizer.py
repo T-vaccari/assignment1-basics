@@ -1,10 +1,7 @@
 from cs336_basics.pretokenization_example import find_chunk_boundaries
 import regex as re
 from multiprocessing import Pool
-
-
-
-
+import os
 
 
 
@@ -42,13 +39,55 @@ def process_chunk(start,end,segment_delimiter,PAT,input_path):
 
 
 
+def _merge_local_pre_token_counts(results):
+   pre_token_count = dict()
+   for lptc in results:
+         for pre_token in lptc.keys():
+            pre_token_count[pre_token] = lptc.get(pre_token, 0) + pre_token_count.get(pre_token,0)
+   return pre_token_count
 
 
+def _pair_statistic(pre_token_count):
+   pair_count = dict()
+   for pre_token in pre_token_count.keys(): #Iterate along all the keys
+            for i in range(len(pre_token)-1):
+               a = pre_token[i]
+               b = pre_token[i+1]
+               pair = (a,b)
+               pair_count[pair]  = pair_count.get(pair, 0) + 1 * pre_token_count[pre_token]
+   return pair_count
+
+
+def _return_top_pair(pair_count):
+   return max(pair_count, key = lambda  x : (pair_count[x], x))
+
+
+def _update_token_count(pre_token_count, top_pair):
+   new_pre_token_count = dict()
+
+   for pre_token in pre_token_count.keys(): #Iterate along all the keys
+      # I have to modify the keys, so now I find that a key has the top_pair in it, I must substitue the tuple, removing
+      # the old separate entries for a and b and obtaining (old bytes*, b'top_pair', old_bytes*)
+      merged_pre_token = list()
+      i = 0
+      while i < len(pre_token):
+         if i < len(pre_token) -1 and top_pair[0]+ top_pair[1] == pre_token[i] + pre_token[i+1]:
+            merged_pre_token.append(top_pair[0] + top_pair[1])
+            i+=2
+         else:
+            merged_pre_token.append(pre_token[i])
+            i+=1
+
+      merged_pre_token = tuple(merged_pre_token)
+      # print(pre_token,merged_pre_token,top_pair)
+      new_pre_token_count[merged_pre_token] = pre_token_count[pre_token]
+
+   return new_pre_token_count
 
 
 
 def train_bpe(
-input_path: str,
+input_path: str | os.PathLike[str],
 vocab_size: int,
 special_tokens: list[str]
    
@@ -86,13 +125,7 @@ special_tokens: list[str]
 
    # Now i have to merge the result into a unique pre_token_count
 
-   pre_token_count = dict()
-
-   for lptc in results:
-      for pre_token in lptc.keys():
-         pre_token_count[pre_token] = lptc.get(pre_token, 0) + pre_token_count.get(pre_token,0)
-
-      
+   pre_token_count = _merge_local_pre_token_counts(results)
 
 
    while len(vocab) < (vocab_size - len(special_tokens) ):
@@ -101,28 +134,17 @@ special_tokens: list[str]
       # Now i have the pre-token dictionary, that takes into account of every chunk, now I can start to count the byte pairs and simply multiply
       # by the occurences of that precise pre-token
 
-      pair_count: dict[tuple[bytes, bytes], int] = {}
+      pair_count: dict[tuple[bytes, bytes], int] = _pair_statistic(pre_token_count)
 
-      for pre_token in pre_token_count.keys(): #Iterate along all the keys
-         for i in range(len(pre_token)-1):
-   
-            a = pre_token[i]
-            b = pre_token[i+1]
-            pair = (a,b)
-            # print(pre_token, len(pre_token),type(pre_token),print(pre_token[i:i+1]),tuple([pre_token[i],pre_token[i+1]]),pair)
-            pair_count[pair]  = pair_count.get(pair, 0) + 1 * pre_token_count[pre_token]
-   
-
-
-      # print(pair_count)
       # Now I can pick-up the most frequent pair, if we have a tie I must choose the lexicographically greater pair
       
       # To obtain the top-pair I can use the lambda that creates tuples, if we have a tie on the appearences then python compares lexicographically 
       # the byte pairs
       if len(pair_count) == 0:
          break
-      top_pair = max(pair_count, key = lambda  x : (pair_count[x], x))
-      # print(top_pair,type(top_pair))
+
+      top_pair = _return_top_pair(pair_count)
+      
 
       # Now I can append the top sequences in the merges, and then I have to substitue in each occurence of the pair with the new byte
       merges.append(top_pair)
@@ -134,26 +156,9 @@ special_tokens: list[str]
 
       # Now I have to substitute each occuren of the top pair with in the tuple with the fused byte sequence
 
-      new_pre_token_count = dict()
 
-      for pre_token in pre_token_count.keys(): #Iterate along all the keys
-         # I have to modify the keys, so now I find that a key has the top_pair in it, I must substitue the tuple, removing
-         # the old separate entries for a and b and obtaining (old bytes*, b'top_pair', old_bytes*)
-         merged_pre_token = list()
-         i = 0
-         while i < len(pre_token):
-            if i < len(pre_token) -1 and top_pair[0]+ top_pair[1] == pre_token[i] + pre_token[i+1]:
-               merged_pre_token.append(top_pair[0] + top_pair[1])
-               i+=2
-            else:
-               merged_pre_token.append(pre_token[i])
-               i+=1
 
-         merged_pre_token = tuple(merged_pre_token)
-         # print(pre_token,merged_pre_token,top_pair)
-         new_pre_token_count[merged_pre_token] = pre_token_count[pre_token]
-
-      pre_token_count = new_pre_token_count
+      pre_token_count = _update_token_count(pre_token_count, top_pair)
 
 
       # Now I have to recompute stats for the next merge round, and repeat this process until the vocab size length desired is not reached
@@ -161,9 +166,6 @@ special_tokens: list[str]
    # At the end I can insert in the vocab the special tokens
    for st in special_tokens:
       vocab[len(vocab)] = st.encode("utf-8")  
-
-               
-
 
    return (vocab, merges)
 
@@ -181,8 +183,8 @@ special_tokens: list[str]
 
 if __name__ == "__main__":
    vocab, merges = train_bpe(
-        "data/TinyStoriesV2-GPT4-train.txt",
-        150,
+        "tests/fixtures/corpus.en",
+        500,
         ["<|endoftext|>"],
    )
    print(vocab, merges)
