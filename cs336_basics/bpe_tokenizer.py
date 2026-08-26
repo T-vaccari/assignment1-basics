@@ -81,8 +81,8 @@ special_tokens: list[str]
       # then wait for them to finish and then merge into a unique vocab
       jobs.append((start,end,segment_delimiter,PAT,input_path))
       
-   pool = Pool(num_processes)
-   results = pool.starmap(process_chunk, jobs)
+   with Pool(num_processes) as pool:
+      results = pool.starmap(process_chunk, jobs)
 
    # Now i have to merge the result into a unique pre_token_count
 
@@ -179,6 +179,10 @@ special_tokens: list[str]
 
 
 
-vocab , merges = train_bpe("data/TinyStoriesV2-GPT4-train.txt", 150, ["<|endoftext|>"])
-# vocab , merges = train_bpe("data/test.txt", 258, ["<|endoftext|>"])
-print(vocab, merges)
+if __name__ == "__main__":
+   vocab, merges = train_bpe(
+        "data/TinyStoriesV2-GPT4-train.txt",
+        150,
+        ["<|endoftext|>"],
+   )
+   print(vocab, merges)
