@@ -1,4 +1,4 @@
-from cs336_basics.pretokenization_example import find_chunk_boundaries
+from cs336_basics.bpe.pretokenization_example import find_chunk_boundaries
 import regex as re
 from multiprocessing import Pool
 import os
@@ -139,7 +139,7 @@ special_tokens: list[str]
 
    ## Usage
    with open(input_path, "rb") as f:
-      num_processes = 4
+      num_processes = 8
       boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
    # The following is a serial implementation, but you can parallelize this
@@ -218,10 +218,10 @@ special_tokens: list[str]
 
 if __name__ == "__main__":
    vocab, merges = train_bpe(
-        "tests/fixtures/corpus.en",
+        "data/TinyStoriesV2-GPT4-train.txt",
         500,
         ["<|endoftext|>"],
    )
-   print(vocab, merges)
+
 
 
