@@ -1,7 +1,7 @@
 import time
 import pickle
 
-from cs336_basics.bpe.bpe_tokenizer import train_bpe
+from cs336_basics.bpe.bpe_training import train_bpe
 
 
 INPUT_PATH = "data/owt_train.txt"  

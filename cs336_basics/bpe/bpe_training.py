@@ -98,7 +98,7 @@ def _update_token_count(pre_token_count, top_pair, pair_count, pair_to_key):
       i = 0
       pre_token = key_to_update
       while i < len(pre_token):
-         if i < len(pre_token) -1 and top_pair[0] == pre_token[i] and top_pair[1] == pre_token[i + 1]:
+         if i < len(pre_token) - 1 and top_pair[0] == pre_token[i] and top_pair[1] == pre_token[i + 1]:
             merged_pre_token.append(top_pair[0] + top_pair[1])
             i+=2
          else:

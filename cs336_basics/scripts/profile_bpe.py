@@ -1,4 +1,4 @@
-from cs336_basics.bpe.bpe_tokenizer import train_bpe
+from cs336_basics.bpe.bpe_training import train_bpe
 
 if __name__ == "__main__":
     train_bpe(
