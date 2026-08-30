@@ -47,6 +47,7 @@ line-length = 120
 
 [dependency-groups]
 dev = [
+    "ipykernel>=7.3.0",
     "py-spy>=0.4.2",
 ]
 
