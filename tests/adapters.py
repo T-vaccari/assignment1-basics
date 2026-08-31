@@ -391,7 +391,7 @@ def run_rmsnorm(
         RMSNorm of the `in_features`.
     """
     
-    rmsnorm = RMSNorm(d_model, eps, impl="nondefault")
+    rmsnorm = RMSNorm(d_model, eps, impl="default")
     rmsnorm.load_state_dict({"gain":weights})
 
     return rmsnorm(in_features)

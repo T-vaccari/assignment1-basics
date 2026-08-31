@@ -14,18 +14,16 @@ class RMSNorm(nn.Module):
    def forward(self, x):
       in_dtype = x.dtype
       x = x.to(torch.float32)
-      result = self.gain
-
-
+   
       # pytorch version
       if self.impl == "default":
-         rms = reduce(x**2, "b t c -> b t 1","mean") ** 0.5
-         x_normalized = x / (rms + self.eps)
+         rms = (reduce(x**2, "... c -> ... 1","mean")+ self.eps) ** 0.5
+         x_normalized = x / (rms)
          result = einsum(x_normalized, self.gain, "... features, features -> ... features")
          
       else:
-         rms = (x ** 2).mean(dim= -1, keepdim = True) ** 0.5 # (B, T, 1)
-         x_normalized = x / (rms + self.eps) # (B, T, C) / (B,T,1) -> Broadcast
+         rms = ((x ** 2).mean(dim= -1, keepdim = True)+ self.eps) ** 0.5 # (B, T, 1)
+         x_normalized = x / (rms ) # (B, T, C) / (B,T,1) -> Broadcast
          result = (x_normalized * self.gain) # B,T,C * C -> Broadcast
 
       
