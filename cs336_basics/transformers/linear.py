@@ -2,11 +2,12 @@ import torch
 from torch import nn
 import einops
 from einops import einsum
+
 class Linear(nn.Module):
    def __init__(self, in_features, out_features, device=None, dtype=None):
       super().__init__()
 
-      self.W = nn.Parameter(
+      self.weight = nn.Parameter(
          torch.empty(
             out_features,
             in_features,
@@ -18,7 +19,7 @@ class Linear(nn.Module):
       std = (2 / (in_features + out_features)) ** 0.5
 
       nn.init.trunc_normal_(
-         self.W,
+         self.weight,
          mean=0,
          std=std,
          a=-3 * std,
@@ -27,7 +28,7 @@ class Linear(nn.Module):
       
    def forward(self, x):
 
-      return einsum(x, self.W, "... in_features, out_features in_features -> ... out_features ")
+      return einsum(x, self.weight, "... in_features, out_features in_features -> ... out_features ")
          
 
       

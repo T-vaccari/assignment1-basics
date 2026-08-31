@@ -15,6 +15,7 @@ from cs336_basics.bpe.tokenizer import Tokenizer
 from cs336_basics.transformers.linear import Linear
 from cs336_basics.transformers.embedding import Embedding
 from cs336_basics.transformers.RMSNorm import RMSNorm
+from cs336_basics.transformers.ffn import FeedForwardNetwork
 
 def run_linear(
     d_in: int,
@@ -36,7 +37,7 @@ def run_linear(
     """
 
     linear_layer = Linear(in_features=d_in, out_features= d_out)
-    linear_layer.load_state_dict({"W": weights})
+    linear_layer.load_state_dict({"weight": weights})
 
     return linear_layer(in_features)
     
@@ -92,10 +93,21 @@ def run_swiglu(
     # If your state dict keys match, you can use `load_state_dict()`
     # swiglu.load_state_dict(weights)
     # You can also manually assign the weights
-    # swiglu.w1.weight.data = w1_weight
-    # swiglu.w2.weight.data = w2_weight
-    # swiglu.w3.weight.data = w3_weight
-    raise NotImplementedError
+    swiglu = FeedForwardNetwork(d_model = d_model, d_ff=d_ff)
+    
+    swiglu.w1.weight.data = w1_weight
+    swiglu.w2.weight.data = w2_weight
+    swiglu.w3.weight.data = w3_weight
+#     weights_dict = {
+#    "w1": w1_weight,
+#    "w2": w2_weight,
+#    "w3": w3_weight
+#     }
+
+    # swiglu.load_state_dict(weights_dict)
+
+    return swiglu(in_features)
+    
 
 
 def run_scaled_dot_product_attention(
