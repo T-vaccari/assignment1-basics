@@ -18,6 +18,7 @@ from cs336_basics.transformers.RMSNorm import RMSNorm
 from cs336_basics.transformers.ffn import FeedForwardNetwork
 from cs336_basics.transformers.rope import RotaryPositionalEmbedding
 from cs336_basics.transformers.softmax import softmax
+from cs336_basics.transformers.multi_head_attention import CausalMultiHeadSelfAttention
 from cs336_basics.transformers.scaled_dot_product_attention import scaled_dot_product_attention
 
 
@@ -170,7 +171,27 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_model"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    sequence_length = in_features.shape[-2]
+
+
+
+    
+    
+    multi_head_attention = CausalMultiHeadSelfAttention(
+    d_model=d_model,
+    num_heads=num_heads,
+    max_seq_len=sequence_length
+    )
+
+    packed_qkv_weight = torch.cat(
+    [q_proj_weight, k_proj_weight, v_proj_weight],
+    dim=0
+    )
+    with torch.no_grad():
+        multi_head_attention.packed_qkv_matrix.weight.copy_(packed_qkv_weight)
+        multi_head_attention.proj.weight.copy_(o_proj_weight)
+
+    return multi_head_attention(in_features)
 
 
 def run_multihead_self_attention_with_rope(
@@ -210,7 +231,17 @@ def run_multihead_self_attention_with_rope(
         Float[Tensor, " ... sequence_length d_model"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    multi_head_attention = CausalMultiHeadSelfAttention( d_model=d_model, num_heads=num_heads, max_seq_len=max_seq_len, theta= theta)
+    
+    packed_qkv_weight = torch.cat(
+    [q_proj_weight, k_proj_weight, v_proj_weight],
+    dim=0
+    )
+    with torch.no_grad():
+        multi_head_attention.packed_qkv_matrix.weight.copy_(packed_qkv_weight)
+        multi_head_attention.proj.weight.copy_(o_proj_weight)
+
+    return multi_head_attention(in_features, token_positions )
 
 
 def run_rope(
