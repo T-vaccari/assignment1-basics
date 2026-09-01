@@ -18,6 +18,8 @@ from cs336_basics.transformers.RMSNorm import RMSNorm
 from cs336_basics.transformers.ffn import FeedForwardNetwork
 from cs336_basics.transformers.rope import RotaryPositionalEmbedding
 from cs336_basics.transformers.softmax import softmax
+from cs336_basics.transformers.scaled_dot_product_attention import scaled_dot_product_attention
+
 
 
 
@@ -134,7 +136,7 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
+    return scaled_dot_product_attention(Q, K, V, mask)
 
 
 def run_multihead_self_attention(
