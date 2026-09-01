@@ -16,7 +16,7 @@ from cs336_basics.transformers.linear import Linear
 from cs336_basics.transformers.embedding import Embedding
 from cs336_basics.transformers.RMSNorm import RMSNorm
 from cs336_basics.transformers.ffn import FeedForwardNetwork
-
+from cs336_basics.transformers.rope import RotaryPositionalEmbedding
 def run_linear(
     d_in: int,
     d_out: int,
@@ -224,7 +224,9 @@ def run_rope(
     Returns:
         Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
     """
-    raise NotImplementedError
+    rope = RotaryPositionalEmbedding(theta, d_k, max_seq_len=max_seq_len)
+    return rope(in_query_or_key, token_positions)
+    
 
 
 def run_transformer_block(

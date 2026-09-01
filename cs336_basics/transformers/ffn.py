@@ -3,6 +3,9 @@ from torch import nn
 import einops
 from einops import einsum
 
+
+from cs336_basics.transformers.linear import Linear
+
 """
 SwiGLU feed-forward network, composed of a SiLU activation
 function and a GLU(Gated Linear Unit).
@@ -69,12 +72,6 @@ This comes from trying to keep the FFN roughly at the same original FLOPs costs.
 
 # Version using the already implemented Linear Layer
 
-
-
-import torch
-from torch import nn
-
-from cs336_basics.transformers.linear import Linear
 
 class FeedForwardNetwork(nn.Module):
    def __init__(self, d_model, d_ff=None, device=None, dtype=None):
