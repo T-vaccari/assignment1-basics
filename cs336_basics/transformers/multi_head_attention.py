@@ -43,7 +43,8 @@ class CausalMultiHeadSelfAttention(nn.Module):
       # Before applying attention I need to apply rope to q and k
       if self.theta is not None:
             
-
+         if token_positions is None:
+            token_positions = torch.arange(T, device=x.device)
          q = self.rope(q, token_positions)
          k = self.rope(k, token_positions)
       

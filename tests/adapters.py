@@ -8,7 +8,7 @@ import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
-
+from typing import cast
 
 from cs336_basics.bpe.bpe_training import train_bpe
 from cs336_basics.bpe.tokenizer import Tokenizer
@@ -20,6 +20,8 @@ from cs336_basics.transformers.rope import RotaryPositionalEmbedding
 from cs336_basics.transformers.softmax import softmax
 from cs336_basics.transformers.multi_head_attention import CausalMultiHeadSelfAttention
 from cs336_basics.transformers.scaled_dot_product_attention import scaled_dot_product_attention
+from cs336_basics.transformers.transformer_block import TransformerBlock
+from cs336_basics.transformers.transformer_lm import TransformerLM
 
 
 
@@ -338,8 +340,22 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    transformer_block = TransformerBlock(d_model, num_heads, d_ff, max_seq_len, theta)
 
+    packed_qkv_weight = torch.cat([weights["attn.q_proj.weight"], weights["attn.k_proj.weight"], weights["attn.v_proj.weight"]], dim=0)
+
+    with torch.no_grad():
+      transformer_block.multi_head_attention.packed_qkv_matrix.weight.copy_(packed_qkv_weight)
+      transformer_block.multi_head_attention.proj.weight.copy_(weights["attn.output_proj.weight"])
+
+      transformer_block.rms_norm1.gain.copy_(weights["ln1.weight"])
+      transformer_block.rms_norm2.gain.copy_(weights["ln2.weight"])
+
+      transformer_block.ffn.w1.weight.copy_(weights["ffn.w1.weight"])
+      transformer_block.ffn.w2.weight.copy_(weights["ffn.w2.weight"])
+      transformer_block.ffn.w3.weight.copy_(weights["ffn.w3.weight"])
+
+    return transformer_block(in_features)
 
 def run_transformer_lm(
     vocab_size: int,
@@ -420,7 +436,30 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    model = TransformerLM(vocab_size, context_length, d_model, num_layers, num_heads, d_ff, rope_theta)
+
+    with torch.no_grad():
+        model.token_embeddings.embedding_table.copy_(weights["token_embeddings.weight"])
+
+        for i in range(num_layers):
+            layer = cast(TransformerBlock, model.layers[i])
+
+            packed_qkv_weight = torch.cat([weights[f"layers.{i}.attn.q_proj.weight"], weights[f"layers.{i}.attn.k_proj.weight"], weights[f"layers.{i}.attn.v_proj.weight"]], dim=0)
+
+            layer.multi_head_attention.packed_qkv_matrix.weight.copy_(packed_qkv_weight)
+            layer.multi_head_attention.proj.weight.copy_(weights[f"layers.{i}.attn.output_proj.weight"])
+
+            layer.rms_norm1.gain.copy_(weights[f"layers.{i}.ln1.weight"])
+            layer.rms_norm2.gain.copy_(weights[f"layers.{i}.ln2.weight"])
+
+            layer.ffn.w1.weight.copy_(weights[f"layers.{i}.ffn.w1.weight"])
+            layer.ffn.w2.weight.copy_(weights[f"layers.{i}.ffn.w2.weight"])
+            layer.ffn.w3.weight.copy_(weights[f"layers.{i}.ffn.w3.weight"])
+
+            model.ln_final.gain.copy_(weights["ln_final.weight"])
+            model.lm_head.weight.copy_(weights["lm_head.weight"])
+
+    return model(in_indices)
 
 
 def run_rmsnorm(
