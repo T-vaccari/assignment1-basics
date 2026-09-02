@@ -1,0 +1,316 @@
+import argparse
+import os
+import numpy as np
+import torch
+
+from cs336_basics.transformers.transformer_lm import TransformerLM
+from cs336_basics.scheduler.cosine_learning_rate_schedule import cosine_lr_scheduler
+from cs336_basics.data_loader.data_loader import data_loader
+from cs336_basics.loss.cross_entropy_loss import cross_entropy_loss
+from cs336_basics.regularization.gradient_clipping import grad_clipping
+from cs336_basics.checkpoint.checkpoint import load_checkpoint, save_checkpoint
+from cs336_basics.optimizer.adamw import AdamW
+
+"""
+knobs:
+data
+   train_path
+   val_path
+
+model
+   vocab_size
+   context_length
+   num_layers
+   d_model
+   num_heads
+   d_ff
+   rope_theta
+
+optimizer
+   lr_max
+   lr_min
+   warmup_steps
+   cosine_steps
+   betas
+   eps
+   weight_decay
+   max_grad_norm
+
+training
+   batch_size
+   num_steps
+   eval_interval
+   eval_batches
+   checkpoint_interval
+   checkpoint_path
+   resume_checkpoint
+   device
+"""
+
+
+def evaluate(model, val_data, args):
+   model.eval()
+
+   losses = []
+
+   with torch.no_grad():
+      for _ in range(args.eval_batches):
+         
+         x, y = data_loader(val_data, args.batch_size, args.context_length, device = args.device)
+
+         logits = model(x)
+         loss = cross_entropy_loss(logits, y)
+         losses.append(loss.item())
+
+   model.train()
+
+   return sum(losses) / len(losses)
+
+
+
+def main(args):
+   print("Training configuration:")
+   print(args)
+
+   device = args.device
+
+   # Retrieve data from disk, with mmap, so they are not loaded in bulk into memory
+   train_data = np.load(args.train_path, mmap_mode="r")
+   val_data = np.load(args.val_path, mmap_mode="r")
+
+   print(f"Training tokens: {len(train_data):,}")
+   print(f"Validation tokens: {len(val_data):,}")
+
+   # Instantiate the model
+   model = TransformerLM(
+      vocab_size=args.vocab_size,
+      context_length=args.context_length,
+      num_layers=args.num_layers,
+      d_model=args.d_model,
+      num_heads=args.num_heads,
+      d_ff=args.d_ff,
+      rope_theta=args.rope_theta,
+   )
+
+   model = model.to(device)
+
+   # Instantiate the optimizer
+   optimizer = AdamW(
+      model.parameters(),
+      lr=args.lr_max,
+      betas=tuple(args.betas),
+      eps=args.eps,
+      weight_decay=args.weight_decay,
+   )
+
+   # Create checkpoint directory
+   os.makedirs(args.checkpoint_path, exist_ok=True)
+
+   start_step = 0
+
+   # Resume training from checkpoint
+   if args.resume_checkpoint is not None:
+      checkpoint_step = load_checkpoint(args.resume_checkpoint, model, optimizer)
+      start_step = checkpoint_step + 1
+
+      print(f"Resuming training from step {start_step}")
+
+
+
+   model.train()
+
+   for step in range(start_step, args.num_steps):
+      
+      lr = cosine_lr_scheduler(step, args.lr_max, args.lr_min, args.warmup_steps, args.cosine_steps)
+
+
+      for param_group in optimizer.param_groups:
+         param_group["lr"] = lr
+
+      
+      x, y = data_loader(train_data, args.batch_size, args.context_length, device = device)
+
+      optimizer.zero_grad()
+
+      
+      logits = model(x)
+      loss = cross_entropy_loss(logits, y)
+
+      
+      loss.backward()
+
+      
+      grad_clipping(
+         model.parameters(),
+         args.max_grad_norm,
+      )
+
+      
+      optimizer.step()
+
+      if step % args.eval_interval == 0:
+         
+         val_loss = evaluate(model, val_data, args)
+
+         print(
+            f"step {step:6d} | "
+            f"lr {lr:.6e} | "
+            f"loss {loss: .6e} | "
+            f"val_loss {val_loss: .6e}"
+         )
+
+      if step > 0 and step % args.checkpoint_interval == 0:
+         checkpoint_path = os.path.join(args.checkpoint_path, f"step_{step}.pt")
+         save_checkpoint(model, optimizer, step, checkpoint_path)
+
+   checkpoint_path = os.path.join(args.checkpoint_path, f"step_{step}.pt")
+   save_checkpoint(model, optimizer, step, checkpoint_path)
+
+
+def parse_args():
+   parser = argparse.ArgumentParser(description="Train language model")
+
+   # -------------------------------------------------------------------------
+   # Data
+   # -------------------------------------------------------------------------
+   data = parser.add_argument_group("data")
+
+   data.add_argument(
+      "--train-path",
+      type=str,
+      required=True,
+      help="Path to the training dataset",
+   )
+
+   data.add_argument(
+      "--val-path",
+      type=str,
+      required=True,
+      help="Path to the validation dataset",
+   )
+
+   # -------------------------------------------------------------------------
+   # Model
+   # -------------------------------------------------------------------------
+   model = parser.add_argument_group("model")
+
+   model.add_argument("--vocab-size", type=int, required=True)
+   model.add_argument("--context-length", type=int, required=True)
+   model.add_argument("--num-layers", type=int, required=True)
+   model.add_argument("--d-model", type=int, required=True)
+   model.add_argument("--num-heads", type=int, required=True)
+   model.add_argument("--d-ff", type=int, required=True)
+
+   model.add_argument(
+      "--rope-theta",
+      type=float,
+      default=10000.0,
+   )
+
+   # -------------------------------------------------------------------------
+   # Optimizer
+   # -------------------------------------------------------------------------
+   optimizer = parser.add_argument_group("optimizer")
+
+   optimizer.add_argument("--lr-max", type=float, required=True)
+   optimizer.add_argument("--lr-min", type=float, required=True)
+
+   optimizer.add_argument(
+      "--warmup-steps",
+      type=int,
+      required=True,
+   )
+
+   optimizer.add_argument(
+      "--cosine-steps",
+      type=int,
+      required=True,
+   )
+
+   optimizer.add_argument(
+      "--betas",
+      type=float,
+      nargs=2,
+      metavar=("BETA1", "BETA2"),
+      default=(0.9, 0.95),
+   )
+
+   optimizer.add_argument(
+      "--eps",
+      type=float,
+      default=1e-8,
+   )
+
+   optimizer.add_argument(
+      "--weight-decay",
+      type=float,
+      default=0.1,
+   )
+
+   optimizer.add_argument(
+      "--max-grad-norm",
+      type=float,
+      default=1.0,
+   )
+
+   # -------------------------------------------------------------------------
+   # Training
+   # -------------------------------------------------------------------------
+   training = parser.add_argument_group("training")
+
+   training.add_argument(
+      "--batch-size",
+      type=int,
+      required=True,
+   )
+
+   training.add_argument(
+      "--num-steps",
+      type=int,
+      required=True,
+   )
+
+   training.add_argument(
+      "--eval-interval",
+      type=int,
+      default=100,
+   )
+
+   training.add_argument(
+      "--eval-batches",
+      type=int,
+      default=10,
+   )
+
+   training.add_argument(
+      "--checkpoint-interval",
+      type=int,
+      default=1000,
+   )
+
+   training.add_argument(
+      "--checkpoint-path",
+      type=str,
+      default="checkpoints",
+   )
+
+   training.add_argument(
+      "--resume-checkpoint",
+      type=str,
+      default=None,
+      help="Path to checkpoint to resume training from",
+   )
+
+   training.add_argument(
+      "--device",
+      type=str,
+      default="cuda",
+      choices=["cpu", "cuda", "mps"],
+   )
+
+   return parser.parse_args()
+
+
+if __name__ == "__main__":
+   args = parse_args()
+   main(args)

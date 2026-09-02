@@ -1,7 +1,7 @@
 
 import math
 
-def cosine_lr_schedulere(t, alpha_max, alpha_min, T_w, T_c):
+def cosine_lr_scheduler(t, alpha_max, alpha_min, T_w, T_c):
    if t < T_w:
       return (t/T_w) * alpha_max
    if T_w<= t <= T_c:
