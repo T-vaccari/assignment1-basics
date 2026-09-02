@@ -1,8 +1,12 @@
 import argparse
+import csv
+import json
 import os
+import time
+from datetime import datetime
+
 import numpy as np
 import torch
-import time
 
 from cs336_basics.transformers.transformer_lm import TransformerLM
 from cs336_basics.scheduler.cosine_learning_rate_schedule import cosine_lr_scheduler
@@ -38,15 +42,85 @@ optimizer
    max_grad_norm
 
 training
+   run_name
+   experiments_dir
    batch_size
    num_steps
    eval_interval
    eval_batches
    checkpoint_interval
-   checkpoint_path
    resume_checkpoint
    device
 """
+
+
+def create_experiment(args):
+   timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+   run_dir = os.path.join(args.experiments_dir, f"{args.run_name}_{timestamp}")
+   checkpoint_dir = os.path.join(run_dir, "checkpoints")
+   metrics_path = os.path.join(run_dir, "metrics.csv")
+
+   os.makedirs(checkpoint_dir, exist_ok=False)
+
+   config = {
+      "data": {
+         "train_path": args.train_path,
+         "val_path": args.val_path,
+      },
+      "model": {
+         "vocab_size": args.vocab_size,
+         "context_length": args.context_length,
+         "num_layers": args.num_layers,
+         "d_model": args.d_model,
+         "num_heads": args.num_heads,
+         "d_ff": args.d_ff,
+         "rope_theta": args.rope_theta,
+      },
+      "optimizer": {
+         "lr_max": args.lr_max,
+         "lr_min": args.lr_min,
+         "warmup_steps": args.warmup_steps,
+         "cosine_steps": args.cosine_steps,
+         "betas": args.betas,
+         "eps": args.eps,
+         "weight_decay": args.weight_decay,
+         "max_grad_norm": args.max_grad_norm,
+      },
+      "training": {
+         "run_name": args.run_name,
+         "experiments_dir": args.experiments_dir,
+         "batch_size": args.batch_size,
+         "num_steps": args.num_steps,
+         "eval_interval": args.eval_interval,
+         "eval_batches": args.eval_batches,
+         "checkpoint_interval": args.checkpoint_interval,
+         "resume_checkpoint": args.resume_checkpoint,
+         "device": args.device,
+      },
+   }
+
+   config_text = json.dumps(config, indent=3)
+
+   print("Run directory:", run_dir)
+   print("=" * 80)
+   print("EXPERIMENT CONFIGURATION")
+   print(config_text)
+   print("=" * 80)
+
+   with open(os.path.join(run_dir, "config.json"), "w") as f:
+      f.write(config_text + "\n")
+
+   with open(metrics_path, "w", newline="") as f:
+      writer = csv.writer(f)
+      writer.writerow(["step", "wall_time_s", "train_loss", "val_loss", "lr", "tokens_per_sec"])
+
+   return checkpoint_dir, metrics_path
+
+
+def write_metrics(metrics_path, step, wall_time_s, train_loss, val_loss, lr, tokens_per_second):
+   with open(metrics_path, "a", newline="") as f:
+      writer = csv.writer(f)
+      writer.writerow([step, wall_time_s, train_loss, val_loss, lr, tokens_per_second])
 
 
 def evaluate(model, val_data, args):
@@ -70,8 +144,8 @@ def evaluate(model, val_data, args):
 
 
 def main(args):
-   print("Training configuration:")
-   print(args)
+   checkpoint_dir, metrics_path = create_experiment(args)
+   run_start_time = time.perf_counter()
 
    device = args.device
 
@@ -103,9 +177,6 @@ def main(args):
       eps=args.eps,
       weight_decay=args.weight_decay,
    )
-
-   # Create checkpoint directory
-   os.makedirs(args.checkpoint_path, exist_ok=True)
 
    start_step = 0
 
@@ -166,11 +237,21 @@ def main(args):
          )
          print(f"Tok/s:{tokens_per_second}")
 
+         write_metrics(
+            metrics_path,
+            step,
+            time.perf_counter() - run_start_time,
+            loss.item(),
+            val_loss,
+            lr,
+            tokens_per_second,
+         )
+
       if step > 0 and step % args.checkpoint_interval == 0:
-         checkpoint_path = os.path.join(args.checkpoint_path, f"step_{step}.pt")
+         checkpoint_path = os.path.join(checkpoint_dir, f"step_{step}.pt")
          save_checkpoint(model, optimizer, step, checkpoint_path)
 
-   checkpoint_path = os.path.join(args.checkpoint_path, f"step_{step}.pt")
+   checkpoint_path = os.path.join(checkpoint_dir, f"step_{step}.pt")
    save_checkpoint(model, optimizer, step, checkpoint_path)
 
 
@@ -266,6 +347,18 @@ def parse_args():
    training = parser.add_argument_group("training")
 
    training.add_argument(
+      "--run-name",
+      type=str,
+      required=True,
+   )
+
+   training.add_argument(
+      "--experiments-dir",
+      type=str,
+      default="experiments",
+   )
+
+   training.add_argument(
       "--batch-size",
       type=int,
       required=True,
@@ -293,12 +386,6 @@ def parse_args():
       "--checkpoint-interval",
       type=int,
       default=1000,
-   )
-
-   training.add_argument(
-      "--checkpoint-path",
-      type=str,
-      default="checkpoints",
    )
 
    training.add_argument(
