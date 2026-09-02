@@ -26,10 +26,10 @@ def cross_entropy_loss(logits, targets):
    maxes = torch.max(logits, dim = -1, keepdim=True).values
    logits -= maxes
 
-   targets = rearrange(targets, "... (batch_size single) -> ... batch_size single" , single = 1)
+   targets = rearrange(targets, "... -> ... 1")
 
    result = torch.gather(logits, dim = -1, index = targets)
-   result = - result + torch.log(torch.sum(torch.exp(logits), dim = -1))
+   result = - result + torch.log(torch.sum(torch.exp(logits), dim = -1, keepdim=True))
 
    # Then i could return the grand mean of the resulting matrix
    result = torch.mean(result)
