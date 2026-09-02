@@ -12,8 +12,8 @@ def data_loader(x, batch_size, context_length, device = 'mps'):
    tokens_idx = idx + offsets
    target_idx = tokens_idx + 1
 
-   tokens = torch.tensor(x[tokens_idx]).to(device)
-   target = torch.tensor(x[target_idx]).to(device)
+   tokens = torch.tensor(x[tokens_idx], dtype=torch.long, device=device)
+   target = torch.tensor(x[target_idx], dtype=torch.long, device=device)
 
    return (tokens , target)
 

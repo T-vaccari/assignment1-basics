@@ -2,6 +2,7 @@ import argparse
 import os
 import numpy as np
 import torch
+import time
 
 from cs336_basics.transformers.transformer_lm import TransformerLM
 from cs336_basics.scheduler.cosine_learning_rate_schedule import cosine_lr_scheduler
@@ -93,7 +94,7 @@ def main(args):
    )
 
    model = model.to(device)
-
+   torch.compile(model)
    # Instantiate the optimizer
    optimizer = AdamW(
       model.parameters(),
@@ -132,7 +133,7 @@ def main(args):
 
       optimizer.zero_grad()
 
-      
+      start = time.perf_counter()
       logits = model(x)
       loss = cross_entropy_loss(logits, y)
 
@@ -148,6 +149,11 @@ def main(args):
       
       optimizer.step()
 
+      elapsed = time.perf_counter() - start
+      tokens_this_step = args.batch_size * args.context_length
+      tokens_per_second = tokens_this_step / elapsed
+      
+
       if step % args.eval_interval == 0:
          
          val_loss = evaluate(model, val_data, args)
@@ -158,6 +164,7 @@ def main(args):
             f"loss {loss: .6e} | "
             f"val_loss {val_loss: .6e}"
          )
+         print(f"Tok/s:{tokens_per_second}")
 
       if step > 0 and step % args.checkpoint_interval == 0:
          checkpoint_path = os.path.join(args.checkpoint_path, f"step_{step}.pt")
