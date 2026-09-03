@@ -192,8 +192,9 @@ def main(args):
    model.train()
    if args.device ==  "mps":
       model = torch.compile(model, backend="aot_eager")
-   else:
+   if args.device == "cuda":
       model = torch.compile(model)
+      torch.set_float32_matmul_precision('high')
 
    for step in range(start_step, args.num_steps):
       
