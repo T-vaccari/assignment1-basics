@@ -211,7 +211,7 @@ def main(args):
    )
 
    model = model.to(device)
-   torch.compile(model)
+   
    # Instantiate the optimizer
    optimizer = AdamW(
       model.parameters(),
@@ -237,7 +237,7 @@ def main(args):
       model = torch.compile(model, backend="aot_eager")
    if args.device == "cuda":
       model = torch.compile(model)
-      torch.set_float32_matmul_precision('high')
+      # torch.set_float32_matmul_precision('high')
 
    for step in range(start_step, args.num_steps):
       
