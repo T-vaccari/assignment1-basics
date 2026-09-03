@@ -190,6 +190,10 @@ def main(args):
 
 
    model.train()
+   if args.device ==  "mps":
+      model = torch.compile(model, backend="aot_eager")
+   else:
+      model = torch.compile(model)
 
    for step in range(start_step, args.num_steps):
       
