@@ -9,7 +9,7 @@ def grad_clipping(params, max_norm , eps = 1e-6):
 
    norm = math.sqrt(squared_grad_sum)
    if norm < max_norm:
-      return
+      return norm
 
    factor =  max_norm/(norm + eps) 
    for p in params:
@@ -17,5 +17,6 @@ def grad_clipping(params, max_norm , eps = 1e-6):
          continue
       p.grad *= factor
 
+   return norm
 
 

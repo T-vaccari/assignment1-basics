@@ -112,15 +112,58 @@ def create_experiment(args):
 
    with open(metrics_path, "w", newline="") as f:
       writer = csv.writer(f)
-      writer.writerow(["step", "wall_time_s", "train_loss", "val_loss", "lr", "tokens_per_sec"])
+      writer.writerow([
+         "step",
+         "wall_time_s",
+         "train_loss",
+         "val_loss",
+         "lr",
+         "tokens_per_sec",
+         "gradient_rms",
+         "weight_rms",
+      ])
 
    return checkpoint_dir, metrics_path
 
 
-def write_metrics(metrics_path, step, wall_time_s, train_loss, val_loss, lr, tokens_per_second):
+def write_metrics(
+   metrics_path,
+   step,
+   wall_time_s,
+   train_loss,
+   val_loss,
+   lr,
+   tokens_per_second,
+   gradient_rms,
+   weight_rms,
+):
    with open(metrics_path, "a", newline="") as f:
       writer = csv.writer(f)
-      writer.writerow([step, wall_time_s, train_loss, val_loss, lr, tokens_per_second])
+      writer.writerow([
+         step,
+         wall_time_s,
+         train_loss,
+         val_loss,
+         lr,
+         tokens_per_second,
+         gradient_rms,
+         weight_rms,
+      ])
+
+
+def parameter_rms(parameters, use_grad=False):
+   squared_sum = 0.0
+   num_elements = 0
+
+   for parameter in parameters:
+      tensor = parameter.grad if use_grad else parameter
+
+      if tensor is not None:
+         tensor = tensor.detach().float()
+         squared_sum += tensor.square().sum()
+         num_elements += tensor.numel()
+
+   return torch.sqrt(squared_sum / num_elements).item()
 
 
 def evaluate(model, val_data, args):
@@ -216,8 +259,13 @@ def main(args):
       
       loss.backward()
 
+      should_evaluate = step % args.eval_interval == 0
+
+      if should_evaluate:
+         gradient_rms = parameter_rms(model.parameters(), use_grad=True)
+
       
-      grad_clipping(
+      norm_pre_clip = grad_clipping(
          model.parameters(),
          args.max_grad_norm,
       )
@@ -225,12 +273,15 @@ def main(args):
       
       optimizer.step()
 
+      if should_evaluate:
+         weight_rms = parameter_rms(model.parameters())
+
       elapsed = time.perf_counter() - start
       tokens_this_step = args.batch_size * args.context_length
       tokens_per_second = tokens_this_step / elapsed
       
 
-      if step % args.eval_interval == 0:
+      if should_evaluate:
          
          val_loss = evaluate(model, val_data, args)
 
@@ -238,9 +289,14 @@ def main(args):
             f"step {step:6d} | "
             f"lr {lr:.6e} | "
             f"loss {loss: .6e} | "
-            f"val_loss {val_loss: .6e}"
+            f"val_loss {val_loss: .6e} | "
+            f"grad_norm {norm_pre_clip: .6e} | "
+            f"grad_rms {gradient_rms: .6e} | "
+            f"weight_rms {weight_rms: .6e} | "
+            f"wall_clock_time {elapsed: .6e} | "
+            f"Tok/s:{tokens_per_second}"
          )
-         print(f"Tok/s:{tokens_per_second}")
+         
 
          write_metrics(
             metrics_path,
@@ -250,6 +306,8 @@ def main(args):
             val_loss,
             lr,
             tokens_per_second,
+            gradient_rms,
+            weight_rms,
          )
 
       if step > 0 and step % args.checkpoint_interval == 0:
